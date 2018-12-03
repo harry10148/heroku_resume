@@ -20,8 +20,6 @@
 
 
 #正式上線時要放在dockerfile中
-get_ipython().system('pip install redis')
-get_ipython().system('pip install line-bot-sdk')
 
 
 # In[2]:
