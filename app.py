@@ -1,3 +1,65 @@
+
+# coding: utf-8
+
+# In[1]:
+
+
+"""
+    1.建立跟redis的連線
+    2.抓secret_key裡面的資料
+    3.啟用API伺服器基本樣板，啟用伺服器基本
+    4.撰寫用戶關注事件發生時的動作(follow event)
+    5.收到按鈕（postback）的封包後(postback event)
+    6.針對message event的設定
+    7.啟動server
+
+"""
+
+
+# In[1]:
+
+
+#正式上線時要放在dockerfile中
+get_ipython().system('pip install redis')
+get_ipython().system('pip install line-bot-sdk')
+
+
+# In[2]:
+
+
+# #有想到運用方式時再使用
+# """
+
+#     1.針對跟redis的連線
+    
+
+# """
+
+# import redis
+
+# #製作redis連線
+# redis = redis.Redis(
+#     #redis container的host name
+#     host='redis',
+#     port=6379,
+#     #預設沒密碼
+#     password=None,
+#     #給格式
+#     charset="utf-8",
+#     #要解碼不然回傳的資料前面會多一個b
+#     decode_responses=True)
+
+
+# In[3]:
+
+
+"""
+
+    2.抓secret_key裡面的資料（由於是本機執行，所以secret_key可放在本機，不能放在github）
+    
+
+"""
+# 載入json處理套件
 import json
 import os 
 
@@ -22,6 +84,17 @@ handler = WebhookHandler(secretFile.get("secret_key"))
 menu_id = secretFile.get("rich_menu_id")
 server_url = secretFile.get("server_url")
 
+
+# In[4]:
+
+
+"""
+
+  3.啟用伺服器基本樣板，啟用伺服器基本 
+
+"""
+
+# 引用Web Server套件
 from flask import Flask, request, abort
 
 # 從linebot 套件包裡引用 LineBotApi 與 WebhookHandler 類別
@@ -65,6 +138,22 @@ def callback():
 def hello():
     return 'Hello World!!'
 
+
+# In[5]:
+
+
+'''
+
+    4.撰寫用戶關注事件發生時的動作
+        1. 製作並定義旋轉門選單、flexbubble樣板選單
+        2. 取得用戶個資，並存回伺服器
+        3. 把先前製作好的自定義菜單，與用戶做綁定
+        4. 回應用戶，歡迎用的文字消息、圖片、及旋轉門選單
+        5. 製作用戶的redis資料
+
+'''
+
+# 將消息模型，文字收取消息與文字寄發消息，Follow事件引入
 from linebot.models import (
     MessageEvent, FollowEvent, JoinEvent,
     TextSendMessage, TemplateSendMessage,
@@ -76,6 +165,12 @@ from linebot.models import (
 
 # 載入requests套件
 import requests
+
+
+# In[ ]:
+
+
+#宣告並設定推播的 button_template_message (全域變數)
 button_template_message = CarouselTemplate(
             columns=[
                 CarouselColumn(
@@ -115,6 +210,13 @@ button_template_message = CarouselTemplate(
                    ]
             )
 
+
+# In[7]:
+
+
+#宣告並設定推播的 flex bubble (全域變數)
+#圖片的URL要置換成絕對路徑
+#URI要改成想連結的URI
 flexBubbleContainerJsonString_INTRO ="""
 {
     "type": "bubble",
@@ -219,6 +321,10 @@ flexBubbleContainerJsonString_INTRO ="""
     }
   }
 """
+
+
+# In[8]:
+
 
 flexBubbleContainerJsonString_CONTACT ="""
 {
@@ -325,6 +431,13 @@ flexBubbleContainerJsonString_CONTACT ="""
   }
 """
 
+
+# In[ ]:
+
+
+#宣告並設定推播的 flex bubble (全域變數)
+#圖片的URL要置換成絕對路徑
+#URI要改成想連結的URI
 flexBubbleContainerJsonString_WORK ="""
 {
     "type": "bubble",
@@ -517,6 +630,12 @@ flexBubbleContainerJsonString_WORK ="""
     }
   }"""
 
+
+# In[ ]:
+
+
+#將bubble類型的json 進行轉換變成 Python可理解之類型物件，並將該物件封裝進 Flex Message中
+#引用套件
 from linebot.models import(
     FlexSendMessage,BubbleContainer,
 )
@@ -535,6 +654,11 @@ flexBubbleSendMessage_WORK =  FlexSendMessage(alt_text="學習經歷", contents=
 bubbleContainer_contact= BubbleContainer.new_from_json_dict(json.loads(flexBubbleContainerJsonString_CONTACT))
 flexBubbleSendMessage_CONTACT =  FlexSendMessage(alt_text="聯絡資訊", contents=bubbleContainer_contact)
 
+
+# In[11]:
+
+
+# 告知handler，如果收到FollowEvent，則做下面的方法處理
 @handler.add(FollowEvent)
 def reply_text_and_get_user_profile(event):
     
@@ -586,6 +710,18 @@ def reply_text_and_get_user_profile(event):
     )
     
 
+
+# In[12]:
+
+
+"""
+    
+    5.收到按鈕（postback）的封包後
+        1. 先看是哪種按鈕（introduce(yourName自我介紹)，work(yourName工作經驗)，skills(yourName的專長)）
+        2. 執行所需動作（執行之後的哪一些函式）
+        3. 回覆訊息
+
+"""
 from linebot.models import PostbackEvent
 
 #parse_qs用於解析query string
@@ -622,6 +758,20 @@ def handle_post_message(event):
     #其他的pass
     else:
         pass
+
+
+# In[ ]:
+
+
+'''
+    6.針對message event的設定
+    當用戶發出文字消息時，判斷文字內容是否包含一些關鍵字，
+    若有，則回傳客製化訊息
+    若無，則回傳預設訊息。
+
+'''
+
+# 用戶發出文字消息時， 按條件內容, 回傳文字消息
 @handler.add(MessageEvent, message=TextMessage)
 #將這次event的參數抓進來
 def handle_message(event):
@@ -756,6 +906,16 @@ def handle_message(event):
                 template=button_template_message
             )
         )          
+
+
+# In[ ]:
+
+
+'''
+    7.啟動server
+    執行此句，啟動Server，觀察後，按左上方塊，停用Server
+
+'''
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0',port=5000)
